@@ -1,26 +1,26 @@
-FROM alpine:latest
-LABEL authors "Darknet Villain <supervillain@riseup.net>"
+FROM alpine:3.16 as build
 
-ENV HOME_DIR="/home/xd"
-ENV XD_HOME="$HOME_DIR/data"
+RUN apk add go~1 \
+        build-base~0 \
+        git~2 \
+        yarn~1 \
+            && git clone https://github.com/majestrate/XD /root/XD \
+            && cd /root/XD \
+            && sed -i 's/127.0.0.1/172.29.0.1/g' lib/network/i2p/common.go \
+            && make
 
-RUN mkdir -p "$HOME_DIR" "$XD_HOME" \
-    && adduser -S -h "$HOME_DIR" xd \
-    && chown -R xd:nobody "$HOME_DIR" \
-    && chmod -R 700 "$XD_HOME" \
-    && apk add go build-base git yarn \
-    && git clone https://github.com/majestrate/XD /root/XD \
-    && cd /root/XD \
-    && sed -i 's/127.0.0.1/172.29.0.1/g' lib/network/i2p/common.go \
-    && make \
-    && mv /root/XD/XD "$XD_HOME" \
-    && chown xd "$XD_HOME"/XD && chmod +x "$XD_HOME"/XD \
-    && ln -s "$XD_HOME"/XD "$XD_HOME"/xd-cli \
-    && rm -rf /root/XD && apk --purge del go build-base git yarn \
-    && rm -rf /var/cache/apk/*
+FROM alpine:3.16
 
-VOLUME "$XD_HOME"
-WORKDIR "$XD_HOME"
+WORKDIR "/home/xd/data"
+
+COPY --from=build /root/XD/XD .
+
+RUN addgroup -g 1001 xd \
+        && adduser -S -u 1001 -G xd xd \
+        && chown -R xd:xd /home/xd/data \
+        && chmod +x /home/xd/data/XD \
+        && ln -s /home/xd/data/XD /home/xd/data/xd-cli
+
 USER xd
 
 CMD ./XD torrents.ini
